@@ -7,22 +7,25 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+//Error print function//
 void error(char *msg)
 {
     perror(msg);
     exit(1);
 }
 
+//Main function//
 int main(int argc, char *argv[])
 {
+    //variables declaration
     int sockfd, newsockfd, portno, clilen;
-    char buffer[256];
-    char file_name[256],op[256], c;
+    char socket_buffer[256];
+    char value[256],key[256], c;
     struct sockaddr_in serv_addr, cli_addr;
     int n = 0,rm;
-    char num[256];
+    char put_buffer[256];
     time_t mytime;
-            char w[256];
+    char get_buffer[256];
 
     if (argc < 2)
     {
@@ -30,6 +33,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    //socket creation and restoring communication//
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (sockfd < 0)
@@ -52,70 +56,80 @@ int main(int argc, char *argv[])
     clilen = sizeof(cli_addr);
     newsockfd = accept(sockfd,(struct sockaddr *) &cli_addr, &clilen);
 
-    // TODO: while loop begin
     if (newsockfd < 0)
     {
         error("ERROR on accept");
     }
 
+      //Time as in Epoch//
       mytime = time(NULL);
 
     while(1){
-        char src[] = "/home/radhika/Documents/Radhika/";
-        bzero(buffer,256);
-        n = read(newsockfd,buffer,255);
+	
+	//Reading from buffer by clearing the buffer//
+        bzero(socket_buffer,256);
+        n = read(newsockfd,socket_buffer,255);
+
+        //printing the current time//
         printf("Service requested at: %s\n",ctime(&mytime));
-    //    printf("Request from client: %s\n",buffer);
+
+        //Error printing//
         if (n <= 0)
         {
             error("ERROR reading from socket");
         }
 
-        bzero(op,256);
-        bzero(file_name,256);
-      //  printf("second reading\n");
+        //clearing key and value buffers//
+        bzero(key,256);
+        bzero(value,256);
+
+        //initialization of variable to use in a loop//
         int i,j=0,k,l=0;
 
+        //converting socket_buffer character to integer to get operation//
+        k = socket_buffer[0] - '0';
 
-        k = buffer[0] - '0';
-
-        for(i=2;i<strlen(buffer);i++){
-            if(buffer[i] == ';'){
-//                printf("\n");
+        //getting key from the buffer: index starts from 2nd position and ends with ';'. First position has option. From kvsput in clientTCP.c//
+        for(i=2;i<strlen(socket_buffer);i++){
+            if(socket_buffer[i] == ';'){
                 break;
             }
-            op[j] = buffer[i];
+            key[j] = socket_buffer[i];
             j++;
         }
-  //      printf("File name : %s\n",op);
 
+        //getting value from the buffer in a similar way//
         i=i+1;
-        for(;i<strlen(buffer);i++){
-            if(buffer[i] == '\0'){
+        for(;i<strlen(socket_buffer);i++){
+            if(socket_buffer[i] == '\0'){
                 break;
             }
-            file_name[l] = buffer[i];
+            value[l] = socket_buffer[i];
             l++;
         }
-  //      printf("Contents: %s\n",file_name);
 
+        //concatinating strings of directory and keyname into a file name directory//
         int q;
-        strcat(src, op);
+	char src[] = "/tmp/";
+        strcat(src, key);
         strcat(src,".txt");
         FILE *fptr;
+
+        //Switch starts here//
         switch(k){
             case 1:
-  //              printf("PUT request case\n");
+                
+                //PUT operation//
                 fptr = fopen(src,"w");
                 if(fptr == NULL)
                 {
                     printf("Error!");
                     exit(1);
                 }
-                fprintf(fptr,"%s",file_name);
-                bzero(num, 256);
-                sprintf(num,"Ack");
-                q = write(newsockfd,num,strlen(num));
+                fprintf(fptr,"%s",value);
+                bzero(put_buffer, 256);
+                sprintf(put_buffer,"Ack");
+                q = write(newsockfd,put_buffer,strlen(put_buffer));
                 if (q < 0)
                 {
                     error("ERROR writing to socket");
@@ -124,21 +138,17 @@ int main(int argc, char *argv[])
                 break;
 
             case 2:
-                //FILE *fptr;
-//                printf("GET request case\n");
+
+                //GET operation//
                 if ((fptr = fopen(src,"r")) == NULL){
-                  //  printf("Error! opening file");
-                    //exit(1);
                     printf("File not found\n");
                     char *r = "FILE NOT FOUND";
                     write(newsockfd, r, strlen(r));
                     break;
                 }
-                bzero(num, 256);
-                fgets(num, 256, fptr);
-//                printf("read from file, contents: %s\n", num);
-                // TODO error check for read
-                q = write(newsockfd,num,strlen(num));
+                bzero(put_buffer, 256);
+                fgets(put_buffer, 256, fptr);
+                q = write(newsockfd,put_buffer,strlen(put_buffer));
                 if (q < 0)
                 {
                     error("ERROR writing to socket");
@@ -147,26 +157,25 @@ int main(int argc, char *argv[])
                 break;
 
             case 3:
-                bzero(w, 255);
-//                printf("DELETE request case\n");
-//                printf("File location of delete file : %s\n",src);
+              
+                //DELETE operation//
+                bzero(get_buffer, 255);
                 rm = remove(src);
                 if(rm==0){
-//                    printf("File deleted successfully\n");
-                    strcpy(w, "FILE IS DELETED SUCCESSFULLY");
+                    strcpy(get_buffer, "FILE IS DELETED SUCCESSFULLY");
                 }
                 else{
                     printf("File not deleted successfully\n");
                     printf("File not found\n");
-                    strcpy(w, "FILE NOT FOUND AND IS NOT DELETED");
+                    strcpy(get_buffer, "FILE NOT FOUND AND IS NOT DELETED");
                 }
-                q=  write(newsockfd, w, strlen(w));
+                q=  write(newsockfd, get_buffer, strlen(get_buffer));
 
                 if (q < 0)
                 {
                     error("ERROR writing to socket");
                 }
-                  printf("%s\n",w);
+                  printf("%s\n",get_buffer);
                 break;
         }
     }
